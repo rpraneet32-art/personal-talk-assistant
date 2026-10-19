@@ -1,0 +1,238 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f5f6f8;
+  color: #222;
+  line-height: 1.4;
+  padding: 16px;
+}
+
+.app-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: calc(100vh - 32px);
+}
+
+.top-bar {
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-radius: 6px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.top-bar h1 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 8px 14px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-mic {
+  background: #0d6efd;
+  color: #ffffff;
+  border-color: #0d6efd;
+}
+
+.btn-mic.listening {
+  background: #dc3545;
+  border-color: #dc3545;
+}
+
+.btn-send {
+  background: #198754;
+  color: #ffffff;
+  border-color: #198754;
+}
+
+.fallback-note {
+  font-size: 0.88rem;
+  color: #dc3545;
+  font-weight: 500;
+}
+
+.command-form {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-width: 280px;
+}
+
+.command-form input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.95rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.transcript-row {
+  font-size: 0.9rem;
+  color: #555;
+  background: #f8f9fa;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #eee;
+}
+
+.main-content {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+}
+
+.chat-section {
+  flex: 3;
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-radius: 6px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-section h2, .data-panel h2 {
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 6px;
+}
+
+.chat-log {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.chat-line {
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 0.92rem;
+}
+
+.chat-line.user {
+  background: #e7f1ff;
+  border-left: 4px solid #0d6efd;
+  align-self: flex-start;
+  width: 90%;
+}
+
+.chat-line.assistant {
+  background: #f0f7f2;
+  border-left: 4px solid #198754;
+  align-self: flex-start;
+  width: 90%;
+}
+
+.chat-line.error {
+  background: #fff3f3;
+  border-left: 4px solid #dc3545;
+  align-self: flex-start;
+  width: 90%;
+}
+
+.data-section {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.data-panel {
+  background: #ffffff;
+  border: 1px solid #dcdfe4;
+  border-radius: 6px;
+  padding: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.item-list {
+  overflow-y: auto;
+  max-height: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item-card {
+  border: 1px solid #e1e4e8;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 0.88rem;
+  background: #fafbfc;
+}
+
+.item-card .title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.item-card .meta {
+  color: #666;
+  font-size: 0.8rem;
+  display: flex;
+  gap: 8px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.badge-done {
+  background: #d1e7dd;
+  color: #0f5132;
+}
+
+.empty-state {
+  color: #888;
+  font-style: italic;
+  font-size: 0.88rem;
+  padding: 8px 0;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    flex-direction: column;
+  }
+}

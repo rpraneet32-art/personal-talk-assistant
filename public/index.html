@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice-Controlled Personal Talk Assistant</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="top-bar">
+      <h1>Voice-Controlled Personal Talk Assistant</h1>
+      
+      <div class="controls-row">
+        <button id="mic-btn" type="button" class="btn btn-mic">🎙️ Start Listening</button>
+        <span id="voice-fallback" class="fallback-note" style="display: none;">Voice not supported, use the text box.</span>
+        
+        <form id="command-form" class="command-form">
+          <input type="text" id="command-input" placeholder="Type a command (e.g., 'add task buy milk today')" autocomplete="off">
+          <button type="submit" id="send-btn" class="btn btn-send">Send</button>
+        </form>
+      </div>
+
+      <div class="transcript-row">
+        <strong>Transcript: </strong><span id="live-transcript">Waiting for voice input or typed command...</span>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Left/Middle: Chat log -->
+      <section class="chat-section">
+        <h2>Conversation Log</h2>
+        <div id="chat-log" class="chat-log"></div>
+      </section>
+
+      <!-- Right: Tasks and Notes lists -->
+      <section class="data-section">
+        <div class="data-panel">
+          <h2>Tasks</h2>
+          <div id="task-list" class="item-list"></div>
+        </div>
+
+        <div class="data-panel">
+          <h2>Notes</h2>
+          <div id="note-list" class="item-list"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
