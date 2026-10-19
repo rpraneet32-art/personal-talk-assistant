@@ -1,13 +1,15 @@
 // Flexible rule-based parser. Same six intents, many more ways to say them.
 // Returns: { intent, title?, dueDate?, id?, query?, content? }
-//   add_task      -> { title, dueDate }
-//   list_tasks    -> {}
-//   complete_task -> { id } OR { query }   (query = words from the task title)
-//   delete_task   -> { id } OR { query }
-//   add_note      -> { content }
-//   set_due       -> { id | query, dueDate }
-//   list_notes    -> {}
-//   unknown       -> {}
+//   add_task        -> { title, dueDate }
+//   list_tasks      -> {}
+//   complete_task   -> { id } OR { query }   (query = words from the task title)
+//   delete_task     -> { id } OR { query }
+//   add_note        -> { content }
+//   delete_note     -> { id }
+//   clear_completed -> {}
+//   set_due         -> { id | query, dueDate }
+//   list_notes      -> {}
+//   unknown         -> {}
 
 const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -27,7 +29,7 @@ function clean(text) {
   let t = String(text || '').replace(/[.,!?;:]+/g, ' ').replace(/\s+/g, ' ').trim();
   t = t.replace(/^(?:(?:hey|hi|ok|okay)\s+)?(?:assistant\s+)?(?:please\s+)?(?:(?:can|could|would) you\s+(?:please\s+)?)?(?:i (?:want|would like) you to\s+)?/i, '');
   t = t.replace(/\s+please$/i, '');
-  t = t.replace(/\b(task|number)\s+(one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, (m, a, w) => `${a} ${WORDS[w.toLowerCase()]}`);
+  t = t.replace(/\b(task|note|number)\s+(one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, (m, a, w) => `${a} ${WORDS[w.toLowerCase()]}`);
   return t.trim();
 }
 
@@ -77,6 +79,25 @@ function parseCommand(text) {
     || /^what(?:'s| is| are)? (?:in |on )?(?:my )?notes$/i.test(q)
     || /^(?:my )?notes$/i.test(q)) return { intent: 'list_notes' };
 
+  // ---- clear completed tasks ----
+  if (/^(?:delete|remove|clear|drop) (?:all )?(?:completed|done|finished) (?:tasks|todos?|items)?$/i.test(q)
+    || /^(?:clear|delete|remove) (?:completed|finished) (?:tasks|todos?|items)?$/i.test(q)
+    || /^clear (?:all )?completed$/i.test(q)) {
+    return { intent: 'clear_completed' };
+  }
+
+  // ---- delete note ----
+  if ((m = q.match(/^(?:delete|remove|clear|drop) (?:the )?note (?:number )?(\d+)$/i))
+    || (m = q.match(/^(?:delete|remove|clear|drop) (?:the )?note (?:number )?(first|last)$/i))
+    || (m = q.match(/^(?:delete|remove|clear|drop) (?:the )?(first|last) note$/i))) {
+    const val = m[1].toLowerCase();
+    return { intent: 'delete_note', id: /^\d+$/.test(val) ? parseInt(val, 10) : val };
+  }
+  // Ensure "remove/delete note ..." never falls into delete-task-by-title
+  if (/^(?:delete|remove|clear|drop) (?:the )?notes?\b/i.test(q)) {
+    return { intent: 'delete_note' };
+  }
+
   // ---- set due date ----  ("asset" = common speech-to-text slip for "set")
   const V = '(?:set|asset|change|update|move|reschedule)';
   const D = '(?:the )?(?:due date|due|deadline|timeline|date)';
@@ -102,7 +123,14 @@ function parseCommand(text) {
   // ---- delete ----
   if ((m = q.match(/^(?:delete|remove|cancel|clear|drop) (?:the )?task (\d+)$/i))) return { intent: 'delete_task', id: parseInt(m[1], 10) };
   if ((m = q.match(/^(?:delete|remove|cancel|drop) (?:the )?(.+?)(?: from (?:my )?(?:tasks|todo|todo list|list))?$/i))
-    && !/^(?:task|note|all|my)\b/i.test(m[1])) return { intent: 'delete_task', query: m[1].trim() };
+    && !/^(?:task|note|all|my)\b/i.test(m[1])
+    && !/\bone$/i.test(m[1])) return { intent: 'delete_task', query: m[1].trim() };
+
+  // ---- add note (empty content check) ----
+  if (/^(?:add|create|save|take|make|write|jot)(?: down)?(?: a| new)? notes?$/i.test(q)
+    || /^notes?$/i.test(q)) {
+    return { intent: 'add_note', content: '' };
+  }
 
   // ---- add note ----
   if ((m = q.match(/^(?:add|save|create|take|make|write|jot)(?: down)?(?: a| new)? note(?: that| to self| saying)?\s+(.+)$/i))
@@ -120,4 +148,4 @@ function parseCommand(text) {
   return { intent: 'unknown' };
 }
 
-module.exports = { parseCommand };
+module.exports = { parseCommand, parseDate };

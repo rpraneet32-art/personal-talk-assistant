@@ -2,6 +2,7 @@ const path = require('path');
 const express = require('express');
 const db = require('./db');
 const { parseCommand } = require('./parser');
+const { llmParse } = require('./llm');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,6 +22,10 @@ const stmtInsertLog = db.prepare(
 const stmtUpdateTaskStatus = db.prepare('UPDATE tasks SET status = ? WHERE task_id = ? AND user_id = ?');
 const stmtDeleteTask = db.prepare('DELETE FROM tasks WHERE task_id = ? AND user_id = ?');
 const stmtInsertNote = db.prepare('INSERT INTO notes (user_id, content) VALUES (?, ?)');
+const stmtDeleteNote = db.prepare('DELETE FROM notes WHERE note_id = ? AND user_id = ?');
+const stmtGetFirstNote = db.prepare('SELECT note_id FROM notes WHERE user_id = ? ORDER BY note_id ASC LIMIT 1');
+const stmtGetLastNote = db.prepare('SELECT note_id FROM notes WHERE user_id = ? ORDER BY note_id DESC LIMIT 1');
+const stmtClearCompletedTasks = db.prepare("DELETE FROM tasks WHERE user_id = ? AND status = 'done'");
 const stmtUpdateTaskDueDate = db.prepare('UPDATE tasks SET due_date = ? WHERE task_id = ? AND user_id = ?');
 const stmtResolvePendingTaskByQuery = db.prepare(
   "SELECT task_id FROM tasks WHERE user_id = ? AND title LIKE ? AND status = 'pending' ORDER BY task_id DESC LIMIT 1"
@@ -29,6 +34,9 @@ const stmtResolveTaskByQuery = db.prepare(
   'SELECT task_id FROM tasks WHERE user_id = ? AND title LIKE ? ORDER BY task_id DESC LIMIT 1'
 );
 
+// Two-step confirmation state for clearing completed tasks (expires in 30 seconds)
+let pendingClearCompletedExpiresAt = 0;
+
 // Atomic transaction: task creation and command log row committed together
 const addTaskTransaction = db.transaction((userId, title, dueDate, rawText, intent, replyText) => {
   const insertTask = db.prepare('INSERT INTO tasks (user_id, title, due_date) VALUES (?, ?, ?)');
@@ -36,11 +44,40 @@ const addTaskTransaction = db.transaction((userId, title, dueDate, rawText, inte
   stmtInsertLog.run(userId, rawText, intent, replyText, 1);
 });
 
-// POST /api/command - Process voice/typed command
-app.post('/api/command', (req, res) => {
+// POST /api/command - Process voice/typed command (async with deterministic parser + LLM fallback)
+app.post('/api/command', async (req, res) => {
   const rawText = req.body && req.body.text ? String(req.body.text) : '';
-  const parsed = parseCommand(rawText);
+  const trimmed = rawText.trim().toLowerCase();
+
+  // Handle pending clear_completed confirmation
+  if (Date.now() < pendingClearCompletedExpiresAt) {
+    pendingClearCompletedExpiresAt = 0;
+    if (/^(?:yes|confirm|yes delete)$/i.test(trimmed)) {
+      const result = stmtClearCompletedTasks.run(USER_ID);
+      const reply = `${result.changes} completed task${result.changes === 1 ? '' : 's'} deleted.`;
+      stmtInsertLog.run(USER_ID, rawText, 'clear_completed', reply, 1);
+      return res.json({ reply, success: true });
+    }
+  }
+
+  let parsed = parseCommand(rawText);
+  let usedLlm = false;
+
+  // LLM fallback only if deterministic parser returned unknown
+  if (parsed.intent === 'unknown') {
+    try {
+      const currentTasks = stmtAllTasks.all(USER_ID);
+      const currentNotes = stmtAllNotes.all(USER_ID);
+      const llmResult = await llmParse(rawText, currentTasks, currentNotes);
+      if (llmResult && llmResult.intent && llmResult.intent !== 'unknown') {
+        parsed = llmResult;
+        usedLlm = true;
+      }
+    } catch (_) {}
+  }
+
   const intent = parsed.intent;
+  const logIntent = usedLlm ? `${intent}_llm` : intent;
 
   let reply = '';
   let success = true;
@@ -51,7 +88,7 @@ app.post('/api/command', (req, res) => {
         const title = parsed.title;
         const dueDate = parsed.dueDate || null;
         reply = dueDate ? `Task added: ${title} (due ${dueDate})` : `Task added: ${title}`;
-        addTaskTransaction(USER_ID, title, dueDate, rawText, intent, reply);
+        addTaskTransaction(USER_ID, title, dueDate, rawText, logIntent, reply);
         return res.json({ reply, success: true });
       }
 
@@ -143,8 +180,47 @@ app.post('/api/command', (req, res) => {
       }
 
       case 'add_note': {
+        if (!parsed.content || !parsed.content.trim()) {
+          reply = 'What should the note say?';
+          success = false;
+          stmtInsertLog.run(USER_ID, rawText, logIntent, reply, 0);
+          return res.json({ reply, success: false });
+        }
         stmtInsertNote.run(USER_ID, parsed.content);
         reply = `Note added: ${parsed.content}`;
+        success = true;
+        break;
+      }
+
+      case 'delete_note': {
+        let noteId = parsed.id;
+        if (noteId === 'first') {
+          const row = stmtGetFirstNote.get(USER_ID);
+          noteId = row ? row.note_id : null;
+        } else if (noteId === 'last') {
+          const row = stmtGetLastNote.get(USER_ID);
+          noteId = row ? row.note_id : null;
+        }
+
+        if (!noteId) {
+          reply = 'Note not found.';
+          success = false;
+        } else {
+          const result = stmtDeleteNote.run(noteId, USER_ID);
+          if (result.changes === 0) {
+            reply = 'Note not found.';
+            success = false;
+          } else {
+            reply = `Note ${noteId} deleted.`;
+            success = true;
+          }
+        }
+        break;
+      }
+
+      case 'clear_completed': {
+        pendingClearCompletedExpiresAt = Date.now() + 30000;
+        reply = 'Delete all completed tasks? Say yes to confirm.';
         success = true;
         break;
       }
@@ -170,13 +246,13 @@ app.post('/api/command', (req, res) => {
     }
 
     // Log all non-add_task commands (add_task logged within transaction)
-    stmtInsertLog.run(USER_ID, rawText, intent, reply, success ? 1 : 0);
+    stmtInsertLog.run(USER_ID, rawText, logIntent, reply, success ? 1 : 0);
 
     return res.json({ reply, success });
   } catch (error) {
     const errorReply = 'An internal database error occurred.';
     try {
-      stmtInsertLog.run(USER_ID, rawText, intent, errorReply, 0);
+      stmtInsertLog.run(USER_ID, rawText, logIntent || 'unknown', errorReply, 0);
     } catch (_) {}
     return res.status(500).json({ reply: errorReply, success: false });
   }
